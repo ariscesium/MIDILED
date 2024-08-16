@@ -1,4 +1,4 @@
-/* * Data converted from C:/Users/Joshykinz/proj/led_strip_rmt_ws2812/build/esp-idf/mbedtls/x509_crt_bundle
+/* * Data converted from /workspaces/MIDILED/build/esp-idf/mbedtls/x509_crt_bundle
  */
 .data
 #if !defined (__APPLE__) && !defined (__linux__)
