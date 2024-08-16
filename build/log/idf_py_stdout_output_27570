@@ -30,7 +30,7 @@ Processing 2 dependencies:
 -- Found Threads: TRUE  
 -- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS
 -- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS - Success
--- App "led_strip_rmt_ws2812" version: 6d52a62-dirty
+-- App "led_strip_rmt_ws2812" version: 3bd6a32-dirty
 -- Adding linker script /workspaces/MIDILED/build/esp-idf/esp_system/ld/memory.ld
 -- Adding linker script /workspaces/MIDILED/build/esp-idf/esp_system/ld/sections.ld.in
 -- Adding linker script /home/codespace/esp/v5.3/esp-idf/components/esp_rom/esp32s3/ld/esp32s3.rom.ld
