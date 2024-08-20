@@ -1022,3 +1022,13 @@
 6153	6784	1723832016336200561	led_strip_rmt_ws2812.elf	22d9cefe2c3939e3
 6784	6928	1723832016492200568	.bin_timestamp	dcb4b3e2a31afc71
 6928	6977	0	esp-idf/esptool_py/CMakeFiles/app_check_size	9ba17bc66e9f2227
+1187	2446	1723831400540176430	bootloader-prefix/src/bootloader-stamp/bootloader-build	8b2f9e4688670d31
+1187	2446	1723831400540176430	bootloader/bootloader.elf	8b2f9e4688670d31
+1187	2446	1723831400540176430	bootloader/bootloader.bin	8b2f9e4688670d31
+1187	2446	1723831400540176430	bootloader/bootloader.map	8b2f9e4688670d31
+1187	2830	1724126253221714463	esp-idf/main/CMakeFiles/__idf_main.dir/led_strip_rmt_ws2812_main.c.obj	dff0f35d7cd974ee
+2830	3005	1724126253397714467	esp-idf/main/libmain.a	cc56e4996cc9b3a0
+3005	9382	1724126259753714607	esp-idf/esp_system/ld/sections.ld	a1cc778806566d0b
+9382	10714	1724126261093714636	led_strip_rmt_ws2812.elf	22d9cefe2c3939e3
+10714	10910	1724126261301714641	.bin_timestamp	dcb4b3e2a31afc71
+10911	10942	0	esp-idf/esptool_py/CMakeFiles/app_check_size	9ba17bc66e9f2227
