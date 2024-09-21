@@ -6,22 +6,14 @@ void loop() {}
 
 #include "USB.h"
 #include "USBMIDI.h"
-#include <FastLED.h>
 #include <array>
-#include <driver/rmt.h>
-
-#define LED_PIN     GPIO_NUM_48
-#define NUM_LEDS    1
-#define BRIGHTNESS  255
-#define MIN_BRIGHTNESS 20 // Add this line
-#define LED_TYPE    WS2812B
-#define COLOR_ORDER GRB
-#define DISABLE_BUILTIN_RGB
-
-
-CRGB leds[NUM_LEDS];
 
 USBMIDI MIDI;
+
+#ifdef RGB_BUILTIN
+#define RGB_BRIGHTNESS 255
+#define MIN_BRIGHTNESS 20 // Minimum brightness to ensure visibility
+#endif
 
 // Define colors for 88 keys, evenly spaced between Red and Violet
 const int NUM_KEYS = 88;
@@ -60,8 +52,10 @@ void setup() {
     MIDI.begin();
     USB.begin();
 
-    FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-    FastLED.setBrightness(BRIGHTNESS);
+    #ifdef RGB_BUILTIN
+    pinMode(RGB_BUILTIN, OUTPUT);
+    neopixelWrite(RGB_BUILTIN, 0, 0, 0); // Turn off LED initially
+    #endif
 
     // Initialize color mapping
     for (int i = 0; i < NUM_KEYS; i++) {
@@ -69,23 +63,6 @@ void setup() {
         float ratio = (i % (NUM_KEYS / NUM_COLORS)) / float(NUM_KEYS / NUM_COLORS);
         colors[i] = interpolateColor(colorSteps[colorIndex], colorSteps[(colorIndex + 1) % NUM_COLORS], ratio);
     }
-
-    // // Configure RMT peripheral for WS2812B
-    // rmt_tx_channel_config_t tx_chan_config = {
-    //     .gpio_num = LED_PIN,
-    //     .clk_src = RMT_CLK_SRC_DEFAULT,
-    //     .resolution_hz = 10 * 1000 * 1000, // 10MHz resolution
-    //     .mem_block_symbols = 64,
-    //     .trans_queue_depth = 4,
-    // };
-    // rmt_config_t config = RMT_DEFAULT_CONFIG_TX(LED_PIN, RMT_CHANNEL_0);
-    // config.clk_div = 80;
-    // ESP_ERROR_CHECK(rmt_config(&config));
-    // ESP_ERROR_CHECK(rmt_driver_install(config.channel, 0, 0));
-
-    // // Initialize FastLED with the new RMT channel
-    // FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-    // FastLED.setBrightness(BRIGHTNESS);
 }
 
 void loop() {
@@ -94,7 +71,6 @@ void loop() {
     if (MIDI.readPacket(&midi_packet_in)) {
         printDetails(midi_packet_in);
         updateLED(midi_packet_in);
-        FastLED.show();
     }
 }
 
@@ -137,23 +113,30 @@ void updateLED(midiEventPacket_t &midi_packet_in) {
     midi_code_index_number_t code_index_num = MIDI_EP_HEADER_CIN_GET(midi_packet_in.header);
     uint8_t note = midi_packet_in.byte2;
     uint8_t velocity = midi_packet_in.byte3;
-
+    
     if (note >= 21 && note <= 108) { // Standard 88-key range
-        int ledIndex = note - 21; // Map note to LED index
-        uint32_t color = colors[ledIndex];
-
+        int colorIndex = note - 21;
+        uint32_t color = colors[colorIndex];
+        
         if (code_index_num == MIDI_CIN_NOTE_ON && velocity > 0) {
-            // Map velocity to brightness
-            uint8_t brightness = map(velocity, 1, 127, MIN_BRIGHTNESS, BRIGHTNESS);
-
-            leds[ledIndex] = CRGB(((color >> 16) & 0xFF) * brightness / BRIGHTNESS,
-                                  ((color >> 8) & 0xFF) * brightness / BRIGHTNESS,
-                                  (color & 0xFF) * brightness / BRIGHTNESS);
-
-            Serial.printf("Note On: %d, Velocity: %d\n", note, velocity);
+            // Map velocity to brightness, ensuring a minimum brightness
+            uint8_t brightness = map(velocity, 1, 127, MIN_BRIGHTNESS, RGB_BRIGHTNESS);
+            
+            uint8_t r = (((color >> 16) & 0xFF) * brightness / RGB_BRIGHTNESS);
+            uint8_t g = (((color >> 8) & 0xFF) * brightness / RGB_BRIGHTNESS);
+            uint8_t b = ((color & 0xFF) * brightness / RGB_BRIGHTNESS);
+            
+            #ifdef RGB_BUILTIN
+            neopixelWrite(RGB_BUILTIN, r, g, b);
+            #endif
+            
+            Serial.printf("Note On: %d, Velocity: %d, Color: #%06X, Brightness: %d\n", note, velocity, color, brightness);
         } else if (code_index_num == MIDI_CIN_NOTE_OFF || (code_index_num == MIDI_CIN_NOTE_ON && velocity == 0)) {
-            leds[ledIndex] = CRGB::Black; // Turn off LED
-
+            // Turn off LED for Note Off or Note On with velocity 0
+            #ifdef RGB_BUILTIN
+            neopixelWrite(RGB_BUILTIN, 0, 0, 0);
+            #endif
+            
             Serial.printf("Note Off: %d\n", note);
         }
     }
