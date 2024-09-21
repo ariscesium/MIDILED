@@ -10,15 +10,12 @@ void loop() {}
 
 USBMIDI MIDI;
 
-#ifdef RGB_BUILTIN
-#define RGB_BRIGHTNESS 255
 #define MIN_BRIGHTNESS 20 // Minimum brightness to ensure visibility
-#endif
 
-// Define colors for 88 keys, evenly spaced between Red and Violet
-const int NUM_KEYS = 88;
+// Define colors for 128 MIDI notes, with 88 keys (21-108) evenly spaced between Red and Violet
+const int NUM_MIDI_NOTES = 128;
 const int NUM_COLORS = 7;
-std::array<uint32_t, NUM_KEYS> colors;
+std::array<uint32_t, NUM_MIDI_NOTES> colors;
 
 // Color steps (RGB values)
 const uint32_t colorSteps[NUM_COLORS] = {
@@ -54,14 +51,18 @@ void setup() {
 
     #ifdef RGB_BUILTIN
     pinMode(RGB_BUILTIN, OUTPUT);
-    neopixelWrite(RGB_BUILTIN, 0, 0, 0); // Turn off LED initially
+    rgbLedWrite(RGB_BUILTIN, 0, 0, 0); // Turn off LED initially
     #endif
 
     // Initialize color mapping
-    for (int i = 0; i < NUM_KEYS; i++) {
-        int colorIndex = (i * (NUM_COLORS - 1)) / (NUM_KEYS - 1);
-        float ratio = (i % (NUM_KEYS / NUM_COLORS)) / float(NUM_KEYS / NUM_COLORS);
-        colors[i] = interpolateColor(colorSteps[colorIndex], colorSteps[(colorIndex + 1) % NUM_COLORS], ratio);
+    for (int i = 0; i < NUM_MIDI_NOTES; i++) {
+        if (i < 21 || i > 108) {
+            colors[i] = 0; // Black for notes outside 88-key range
+        } else {
+            int colorIndex = ((i - 21) * (NUM_COLORS - 1)) / (108 - 21);
+            float ratio = ((i - 21) % ((108 - 21) / (NUM_COLORS - 1))) / float((108 - 21) / (NUM_COLORS - 1));
+            colors[i] = interpolateColor(colorSteps[colorIndex], colorSteps[(colorIndex + 1) % NUM_COLORS], ratio);
+        }
     }
 }
 
@@ -114,31 +115,28 @@ void updateLED(midiEventPacket_t &midi_packet_in) {
     uint8_t note = midi_packet_in.byte2;
     uint8_t velocity = midi_packet_in.byte3;
     
-    if (note >= 21 && note <= 108) { // Standard 88-key range
-        int colorIndex = note - 21;
-        uint32_t color = colors[colorIndex];
+    uint32_t color = colors[note];
+    
+    if (code_index_num == MIDI_CIN_NOTE_ON && velocity > 0) {
+        // Map velocity to brightness, ensuring a minimum brightness
+        uint8_t brightness = map(velocity, 1, 127, MIN_BRIGHTNESS, RGB_BRIGHTNESS);
         
-        if (code_index_num == MIDI_CIN_NOTE_ON && velocity > 0) {
-            // Map velocity to brightness, ensuring a minimum brightness
-            uint8_t brightness = map(velocity, 1, 127, MIN_BRIGHTNESS, RGB_BRIGHTNESS);
-            
-            uint8_t r = (((color >> 16) & 0xFF) * brightness / RGB_BRIGHTNESS);
-            uint8_t g = (((color >> 8) & 0xFF) * brightness / RGB_BRIGHTNESS);
-            uint8_t b = ((color & 0xFF) * brightness / RGB_BRIGHTNESS);
-            
-            #ifdef RGB_BUILTIN
-            neopixelWrite(RGB_BUILTIN, r, g, b);
-            #endif
-            
-            Serial.printf("Note On: %d, Velocity: %d, Color: #%06X, Brightness: %d\n", note, velocity, color, brightness);
-        } else if (code_index_num == MIDI_CIN_NOTE_OFF || (code_index_num == MIDI_CIN_NOTE_ON && velocity == 0)) {
-            // Turn off LED for Note Off or Note On with velocity 0
-            #ifdef RGB_BUILTIN
-            neopixelWrite(RGB_BUILTIN, 0, 0, 0);
-            #endif
-            
-            Serial.printf("Note Off: %d\n", note);
-        }
+        uint8_t r = (((color >> 16) & 0xFF) * brightness / RGB_BRIGHTNESS);
+        uint8_t g = (((color >> 8) & 0xFF) * brightness / RGB_BRIGHTNESS);
+        uint8_t b = ((color & 0xFF) * brightness / RGB_BRIGHTNESS);
+        
+        #ifdef RGB_BUILTIN
+        rgbLedWrite(RGB_BUILTIN, r, g, b);
+        #endif
+        
+        Serial.printf("Note On: %d, Velocity: %d, Color: #%06X, Brightness: %d\n", note, velocity, color, brightness);
+    } else if (code_index_num == MIDI_CIN_NOTE_OFF || (code_index_num == MIDI_CIN_NOTE_ON && velocity == 0)) {
+        // Turn off LED for Note Off or Note On with velocity 0
+        #ifdef RGB_BUILTIN
+        rgbLedWrite(RGB_BUILTIN, 0, 0, 0);
+        #endif
+        
+        Serial.printf("Note Off: %d\n", note);
     }
 }
 
