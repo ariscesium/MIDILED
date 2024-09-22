@@ -158,5 +158,5 @@ void updateSurroundingLED(int ledIndex, uint32_t color, uint8_t brightness, int 
     ledStates[ledIndex] = (r << 16) | (g << 8) | b;
     Serial.printf("Surrounding LED: %d, Color: RGB(%d, %d, %d), Dimming Factor: %.2f\n", ledIndex, r, g, b, dimFactor);
 }
-
+//hello
 #endif
