@@ -4,13 +4,22 @@ void setup() {}
 void loop() {}
 #else
 
+#include <Adafruit_NeoPixel.h> // Include the Adafruit NeoPixel library
 #include "USB.h"
 #include "USBMIDI.h"
 #include <array>
+#include <vector>
 
 USBMIDI MIDI;
 
 #define MIN_BRIGHTNESS 20 // Minimum brightness to ensure visibility
+#define RGB_BRIGHTNESS 255 // Maximum brightness level
+#define DATA_PIN 6 // Define the data pin for the NeoPixel strip (change as needed)
+
+const float LEN_KEYBOARD = 1.5; // Length of the keyboard in meters
+const int NUM_LEDS = 60; // Number of LEDs in the circuit
+
+Adafruit_NeoPixel strip(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800); // Initialize NeoPixel strip
 
 // Define colors for 128 MIDI notes, with 88 keys (21-108) evenly spaced between Red and Violet
 const int NUM_MIDI_NOTES = 128;
@@ -28,6 +37,9 @@ const uint32_t colorSteps[NUM_COLORS] = {
     0x9400D3  // Violet
 };
 
+// Vector to store the state of each LED
+std::vector<uint32_t> ledStates(NUM_LEDS, 0);
+
 // Function to interpolate between two colors
 uint32_t interpolateColor(uint32_t color1, uint32_t color2, float ratio) {
     uint8_t r1 = (color1 >> 16) & 0xFF;
@@ -36,12 +48,19 @@ uint32_t interpolateColor(uint32_t color1, uint32_t color2, float ratio) {
     uint8_t r2 = (color2 >> 16) & 0xFF;
     uint8_t g2 = (color2 >> 8) & 0xFF;
     uint8_t b2 = color2 & 0xFF;
-    
+
     uint8_t r = r1 * (1 - ratio) + r2 * ratio;
     uint8_t g = g1 * (1 - ratio) + g2 * ratio;
     uint8_t b = b1 * (1 - ratio) + b2 * ratio;
-    
+
     return (r << 16) | (g << 8) | b;
+}
+
+// Function to map MIDI note to LED index
+int mapNoteToLED(int note) {
+    if (note < 21 || note > 108) return -1; // Out of range
+    float notePosition = (note - 21) / 87.0; // Normalize to 0-1 range
+    return int(notePosition * NUM_LEDS);
 }
 
 void setup() {
@@ -49,10 +68,9 @@ void setup() {
     MIDI.begin();
     USB.begin();
 
-    #ifdef RGB_BUILTIN
-    pinMode(RGB_BUILTIN, OUTPUT);
-    rgbLedWrite(RGB_BUILTIN, 0, 0, 0); // Turn off LED initially
-    #endif
+    // Initialize NeoPixel strip
+    strip.begin();
+    strip.show(); // Clear all LEDs initially
 
     // Initialize color mapping
     for (int i = 0; i < NUM_MIDI_NOTES; i++) {
@@ -71,73 +89,74 @@ void loop() {
 
     if (MIDI.readPacket(&midi_packet_in)) {
         printDetails(midi_packet_in);
-        updateLED(midi_packet_in);
+        updateLEDs(midi_packet_in);
     }
 }
 
 void printDetails(midiEventPacket_t &midi_packet_in) {
-  // See Chapter 4: USB-MIDI Event Packets (page 16) of the spec.
-  uint8_t cable_num = MIDI_EP_HEADER_CN_GET(midi_packet_in.header);
-  midi_code_index_number_t code_index_num = MIDI_EP_HEADER_CIN_GET(midi_packet_in.header);
+    uint8_t cable_num = MIDI_EP_HEADER_CN_GET(midi_packet_in.header);
+    midi_code_index_number_t code_index_num = MIDI_EP_HEADER_CIN_GET(midi_packet_in.header);
 
-  Serial.println("Received a USB MIDI packet:");
-  Serial.println(".----.-----.--------.--------.--------.");
-  Serial.println("| CN | CIN | STATUS | DATA 0 | DATA 1 |");
-  Serial.println("+----+-----+--------+--------+--------+");
-  Serial.printf("| %d  |  %X  |   %X   |   %X   |   %X   |\n", cable_num, code_index_num, midi_packet_in.byte1, midi_packet_in.byte2, midi_packet_in.byte3);
-  Serial.println("'----'-----'--------.--------'--------'\n");
-  Serial.print("Description: ");
-
-  switch (code_index_num) {
-    case MIDI_CIN_MISC:        Serial.println("This is a Miscellaneous event"); break;
-    case MIDI_CIN_CABLE_EVENT: Serial.println("This is a Cable event"); break;
-    case MIDI_CIN_SYSCOM_2BYTE:
-    case MIDI_CIN_SYSCOM_3BYTE: Serial.println("This is a System Common (SysCom) event"); break;
-    case MIDI_CIN_SYSEX_START:
-    case MIDI_CIN_SYSEX_END_1BYTE:
-    case MIDI_CIN_SYSEX_END_2BYTE:
-    case MIDI_CIN_SYSEX_END_3BYTE: Serial.println("This is a system exclusive (SysEx) event"); break;
-    case MIDI_CIN_NOTE_ON: Serial.printf("This is a Note-On event of Note %d with a Velocity of %d\n", midi_packet_in.byte2, midi_packet_in.byte3); break;
-    case MIDI_CIN_NOTE_OFF: Serial.printf("This is a Note-Off event of Note %d with a Velocity of %d\n", midi_packet_in.byte2, midi_packet_in.byte3); break;
-    case MIDI_CIN_POLY_KEYPRESS: Serial.printf("This is a Poly Aftertouch event for Note %d and Value %d\n", midi_packet_in.byte2, midi_packet_in.byte3); break;
-    case MIDI_CIN_CONTROL_CHANGE: Serial.printf("This is a Control Change event of Controller %d with a Value of %d\n", midi_packet_in.byte2, midi_packet_in.byte3); break;
-    case MIDI_CIN_PROGRAM_CHANGE: Serial.printf("This is a Program Change event with a Value of %d\n", midi_packet_in.byte2); break;
-    case MIDI_CIN_CHANNEL_PRESSURE: Serial.printf("This is a Channel Pressure event with a Value of %d\n", midi_packet_in.byte2); break;
-    case MIDI_CIN_PITCH_BEND_CHANGE: Serial.printf("This is a Pitch Bend Change event with a Value of %d\n", ((uint16_t)midi_packet_in.byte2) << 7 | midi_packet_in.byte3); break;
-    case MIDI_CIN_1BYTE_DATA: Serial.printf("This is an embedded Serial MIDI event byte with Value %X\n", midi_packet_in.byte1); break;
-  }
-
-  Serial.println();
+    Serial.println("Received a USB MIDI packet:");
+    Serial.printf("| CN: %d | CIN: %X | STATUS: %X | DATA 0: %X | DATA 1: %X |\n", cable_num, code_index_num, midi_packet_in.byte1, midi_packet_in.byte2, midi_packet_in.byte3);
 }
 
-void updateLED(midiEventPacket_t &midi_packet_in) {
+void updateLEDs(midiEventPacket_t &midi_packet_in) {
     midi_code_index_number_t code_index_num = MIDI_EP_HEADER_CIN_GET(midi_packet_in.header);
     uint8_t note = midi_packet_in.byte2;
     uint8_t velocity = midi_packet_in.byte3;
-    
+
+    int ledIndex = mapNoteToLED(note);
+    if (ledIndex == -1) {
+        Serial.printf("Note %d is out of range and will not light any LED.\n", note);
+        return;
+    }
+
     uint32_t color = colors[note];
-    
+
     if (code_index_num == MIDI_CIN_NOTE_ON && velocity > 0) {
-        // Map velocity to brightness, ensuring a minimum brightness
         uint8_t brightness = map(velocity, 1, 127, MIN_BRIGHTNESS, RGB_BRIGHTNESS);
-        
         uint8_t r = (((color >> 16) & 0xFF) * brightness / RGB_BRIGHTNESS);
         uint8_t g = (((color >> 8) & 0xFF) * brightness / RGB_BRIGHTNESS);
         uint8_t b = ((color & 0xFF) * brightness / RGB_BRIGHTNESS);
-        
-        #ifdef RGB_BUILTIN
-        rgbLedWrite(RGB_BUILTIN, r, g, b);
-        #endif
-        
-        Serial.printf("Note On: %d, Velocity: %d, Color: #%06X, Brightness: %d\n", note, velocity, color, brightness);
+
+        ledStates[ledIndex] = (r << 16) | (g << 8) | b;
+        Serial.printf("Note On: %d -> LED: %d, Color: RGB(%d, %d, %d), Brightness: %d\n", note, ledIndex, r, g, b, brightness);
+
+        // Update surrounding LEDs with diminishing brightness
+        for (int i = 1; i <= 2; i++) {
+            if (ledIndex - i >= 0) updateSurroundingLED(ledIndex - i, color, brightness, i);
+            if (ledIndex + i < NUM_LEDS) updateSurroundingLED(ledIndex + i, color, brightness, i);
+        }
     } else if (code_index_num == MIDI_CIN_NOTE_OFF || (code_index_num == MIDI_CIN_NOTE_ON && velocity == 0)) {
-        // Turn off LED for Note Off or Note On with velocity 0
-        #ifdef RGB_BUILTIN
-        rgbLedWrite(RGB_BUILTIN, 0, 0, 0);
-        #endif
-        
-        Serial.printf("Note Off: %d\n", note);
+        ledStates[ledIndex] = 0;
+        Serial.printf("Note Off: %d -> LED: %d turned off.\n", note, ledIndex);
+
+        // Turn off surrounding LEDs
+        for (int i = 1; i <= 2; i++) {
+            if (ledIndex - i >= 0) ledStates[ledIndex - i] = 0;
+            if (ledIndex + i < NUM_LEDS) ledStates[ledIndex + i] = 0;
+        }
     }
+
+    // Update all LEDs on the strip
+    for (int i = 0; i < NUM_LEDS; i++) {
+        uint32_t state = ledStates[i];
+        strip.setPixelColor(i, (state >> 16) & 0xFF, (state >> 8) & 0xFF, state & 0xFF); // Set RGB values
+    }
+    strip.show(); // Refresh LEDs with new colors
+}
+
+void updateSurroundingLED(int ledIndex, uint32_t color, uint8_t brightness, int distance) {
+    float dimFactor = 1.0 / (distance + 1);
+    uint8_t dimmedBrightness = brightness * dimFactor;
+
+    uint8_t r = (((color >> 16) & 0xFF) * dimmedBrightness / RGB_BRIGHTNESS);
+    uint8_t g = (((color >> 8) & 0xFF) * dimmedBrightness / RGB_BRIGHTNESS);
+    uint8_t b = ((color & 0xFF) * dimmedBrightness / RGB_BRIGHTNESS);
+
+    ledStates[ledIndex] = (r << 16) | (g << 8) | b;
+    Serial.printf("Surrounding LED: %d, Color: RGB(%d, %d, %d), Dimming Factor: %.2f\n", ledIndex, r, g, b, dimFactor);
 }
 
 #endif
