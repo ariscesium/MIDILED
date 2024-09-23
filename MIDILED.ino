@@ -13,7 +13,7 @@ void loop() {}
 USBMIDI MIDI;
 
 #define MIN_BRIGHTNESS 20 // Minimum brightness to ensure visibility
-#define RGB_BRIGHTNESS 255 // Maximum brightness level
+#define MAX_BRIGHTNESS 255 // Maximum brightness level
 #define DATA_PIN 6 // Define the data pin for the NeoPixel strip (change as needed)
 
 const float LEN_KEYBOARD = 1.5; // Length of the keyboard in meters
@@ -115,10 +115,10 @@ void updateLEDs(midiEventPacket_t &midi_packet_in) {
     uint32_t color = colors[note];
 
     if (code_index_num == MIDI_CIN_NOTE_ON && velocity > 0) {
-        uint8_t brightness = map(velocity, 1, 127, MIN_BRIGHTNESS, RGB_BRIGHTNESS);
-        uint8_t r = (((color >> 16) & 0xFF) * brightness / RGB_BRIGHTNESS);
-        uint8_t g = (((color >> 8) & 0xFF) * brightness / RGB_BRIGHTNESS);
-        uint8_t b = ((color & 0xFF) * brightness / RGB_BRIGHTNESS);
+        uint8_t brightness = map(velocity, 1, 127, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+        uint8_t r = (((color >> 16) & 0xFF) * brightness / MAX_BRIGHTNESS);
+        uint8_t g = (((color >> 8) & 0xFF) * brightness / MAX_BRIGHTNESS);
+        uint8_t b = ((color & 0xFF) * brightness / MAX_BRIGHTNESS);
 
         ledStates[ledIndex] = (r << 16) | (g << 8) | b;
         Serial.printf("Note On: %d -> LED: %d, Color: RGB(%d, %d, %d), Brightness: %d\n", note, ledIndex, r, g, b, brightness);
@@ -151,9 +151,9 @@ void updateSurroundingLED(int ledIndex, uint32_t color, uint8_t brightness, int 
     float dimFactor = 1.0 / (distance + 1);
     uint8_t dimmedBrightness = brightness * dimFactor;
 
-    uint8_t r = (((color >> 16) & 0xFF) * dimmedBrightness / RGB_BRIGHTNESS);
-    uint8_t g = (((color >> 8) & 0xFF) * dimmedBrightness / RGB_BRIGHTNESS);
-    uint8_t b = ((color & 0xFF) * dimmedBrightness / RGB_BRIGHTNESS);
+    uint8_t r = (((color >> 16) & 0xFF) * dimmedBrightness / MAX_BRIGHTNESS);
+    uint8_t g = (((color >> 8) & 0xFF) * dimmedBrightness / MAX_BRIGHTNESS);
+    uint8_t b = ((color & 0xFF) * dimmedBrightness / MAX_BRIGHTNESS);
 
     ledStates[ledIndex] = (r << 16) | (g << 8) | b;
     Serial.printf("Surrounding LED: %d, Color: RGB(%d, %d, %d), Dimming Factor: %.2f\n", ledIndex, r, g, b, dimFactor);
